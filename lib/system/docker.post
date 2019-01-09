@@ -1,0 +1,69 @@
+#!/bin/bash
+set -e
+
+# If there is no docker group, add one and grant the user permission
+# to use it.
+#
+# The user account is taken from the first value found in the
+# following list:
+#
+#    1. The ACCT environment variable. This will be set if run from
+#       the "Configure a User/Developer Account" Linode StackScript.
+#
+#    2. The SUDO_USER variable, which is set when a sudo is used to
+#       build and deploy Docker.
+#
+#    3. The USER variable, which indicates the current user. 
+#
+# If none of the above are set or root is found, no user account will
+# be added to the docker group, but the group will still be created.
+if ! grep -q ^docker: /etc/group; then
+    /usr/sbin/groupadd -r -g 281 docker
+
+    ACCT=${ACCT:-${SUDO_USER:-$USER}}
+    if [ x"$ACCT" != xroot ]; then
+	/usr/sbin/usermod -a -G docker "$ACCT"
+    fi
+fi
+
+# Add standard Slackware logic for automatically starting and stopping
+# Docker, if its initscript is executable.
+RC_LOCAL=/etc/rc.d/rc.local
+if ! grep -qw docker $RC_LOCAL; then
+    cat - >> $RC_LOCAL <<"EOF" 
+if [ -x /etc/rc.d/rc.docker ]; then
+  /etc/rc.d/rc.docker start
+fi
+EOF
+fi
+
+SHUTDOWN=${RC_LOCAL}_shutdown
+if ! grep -qw docker $SHUTDOWN; then
+    cat - >> $SHUTDOWN <<"EOF" 
+if [ -x /etc/rc.d/rc.docker ]; then
+  /etc/rc.d/rc.docker stop
+fi
+EOF
+fi
+
+# Enable cgroup memory resource control for swapspace and update lilo.
+LILO_CONF=/etc/lilo.conf
+if ! grep -qw ^append $LILO_CONF; then
+    sed -i '/^image/iappend="swapaccount=1"\
+' $LILO_CONF
+    /sbin/lilo
+
+    if ! zgrep -q ^CONFIG_MEMGC_SWAP_ENABLED=y /proc/config.gz; then
+	cat - <<EOF
+************************************************************************
+The Lilo configuration has been updated to use the Memory Resource
+Controller Swap Extension.
+
+The system must be rebooted to enable this feature. Otherwise, manually
+start Docker using:
+
+    /etc/rc.d/rc.docker start
+************************************************************************
+EOF
+    fi
+fi 

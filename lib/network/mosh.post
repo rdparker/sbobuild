@@ -1,0 +1,15 @@
+#! /bin/sh
+set -e
+
+RCF=/etc/rc.d/rc.firewall
+
+if grep -q '# mosh' $RCF; then
+    exit 0
+fi
+
+sed -i '/^# User specified allowed UDP protocol/a\
+\
+# mosh - mobile shell\
+$IPT -I udp_inbound -j ACCEPT -p udp --dport 60001:60005' $RCF
+
+$RCF restart
