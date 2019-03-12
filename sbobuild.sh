@@ -155,7 +155,7 @@ cd - >/dev/null
 
 /sbin/installpkg /tmp/$PKGFILE
 if [ -n "$SUDO_UID" ]; then
-    chown $SUDO_UID:$SUDO_GID $OUTPUTDIR/$PKGFILE
+    chown $SUDO_UID:$SUDO_GID /tmp/$PKGFILE
 fi
 
 # Post install scripts should be executable and produce the same
