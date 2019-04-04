@@ -63,6 +63,17 @@ if [ ! -d "$OUTPUTDIR" ]; then
 fi
 
 source $PKGDIR/$PRG.info
+
+# A program may have a .infovars file that will be sourced.  It can
+# override values in the SlackBuild's .info file and the variables set
+# in it will be set in the environment of the SlackBuild.
+INFOVARS=""
+IVFILE=$(libfile $PRG infovars)
+if [ -f "$IVFILE" ]; then
+    INFOVARS=$(cat $IVFILE)
+    source $IVFILE
+fi
+
 if [ x"$PRG" != x"$PRGNAM" ]; then
     echo Looking for $PRG SlackBuild. Found $PRGNAM. >&2
     exit 2
@@ -85,7 +96,7 @@ if [ -n "$REQUIRES" ]; then
 	# If the requirement has a file that makes environment
 	# changes, be sure we source it exactly once in our ENVFILE.
 	REQENV=$(libfile $req env)
-  REQVAR=$(echo $req | sed 's/-/_/g')
+	REQVAR=$(echo $req | sed 's/-/_/g')
 	if [ -f "$REQENV" ]; then
 	    cat - >> $ENVFILE.$$ <<EOF
 test -z ${REQVAR}_SOURCED || source $REQENV
@@ -124,7 +135,7 @@ PKGFILE=$PRG-$VERSION-$ARCH-$BUILD$TAG.$PKGTYPE
 if [ -f $OUTPUTDIR/$PKGFILE ]; then
     exit
 fi
-    
+
 for dl in $DOWNLOAD; do
     ARCHIVE=$(basename $dl)
     if [ -e "$ARCHIVE" ]; then
@@ -137,7 +148,7 @@ for dl in $DOWNLOAD; do
     if [ -z "$NO_DL" ]; then
        $MAYBE_SUDO wget $OPT $dl
     fi
-    
+
     if echo "$MD5SUM" | grep -q $(md5sum $ARCHIVE | cut -f1 -d ' '); then
 	:
     else
@@ -147,7 +158,7 @@ for dl in $DOWNLOAD; do
 done
 
 chmod +x $PRG.SlackBuild
-./$PRG.SlackBuild
+env $INFOVARS ./$PRG.SlackBuild
 chmod -x $PRG.SlackBuild
 
 echo $PRG built.
