@@ -1,0 +1,6 @@
+#! /bin/sh -x
+
+source $(dirname $0)/fsharp.infovars
+if [ ! -f fsharp-$VERSION.tar.gz ]; then
+   ln $(basename $DOWNLOAD) fsharp-$VERSION.tar.gz
+fi
