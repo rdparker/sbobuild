@@ -43,12 +43,13 @@ source /etc/os-release
 TAG=$(cd slackbuilds; git tag | grep ^$VERSION | tail -n 1)
 (cd slackbuilds; $GIT checkout $TAG 2>/dev/null)
 
+basedir=$(pwd)
 function pkgdir () {
-    find slackbuilds -name "$1" -type d
+    find $basedir/slackbuilds -name "$1" -type d
 }
 
 function libfile () {
-    echo $(pkgdir "$1" | sed 's=^slackbuilds/=lib/=').$2
+    echo $(pkgdir "$1" | sed 's=/slackbuilds/=/lib/=').$2
 }
 
 PKGDIR=$(pkgdir "$PRG")
@@ -57,7 +58,7 @@ if [ -z "$PKGDIR" ]; then
     exit 2
 fi
 
-OUTPUTDIR=$(pwd)/$(echo $PKGDIR | sed 's=^slackbuilds/=packages/=' | xargs dirname)
+OUTPUTDIR=$(echo $PKGDIR | sed 's=^slackbuilds/=packages/=' | xargs dirname)
 if [ ! -d "$OUTPUTDIR" ]; then
     $MAYBE_SUDO mkdir -p $OUTPUTDIR
 fi
@@ -67,10 +68,8 @@ source $PKGDIR/$PRG.info
 # A program may have a .infovars file that will be sourced.  It can
 # override values in the SlackBuild's .info file and the variables set
 # in it will be set in the environment of the SlackBuild.
-INFOVARS=""
 IVFILE=$(libfile $PRG infovars)
 if [ -f "$IVFILE" ]; then
-    INFOVARS=$(cat $IVFILE)
     source $IVFILE
 fi
 
@@ -146,7 +145,9 @@ for dl in $DOWNLOAD; do
 	fi
     fi
     if [ -z "$NO_DL" ]; then
-       $MAYBE_SUDO wget $OPT $dl
+	$MAYBE_SUDO wget $OPT $dl
+    else
+	unset NO_DL
     fi
 
     if echo "$MD5SUM" | grep -q $(md5sum $ARCHIVE | cut -f1 -d ' '); then
@@ -157,8 +158,29 @@ for dl in $DOWNLOAD; do
     fi
 done
 
+# Prefiles may be used to handle any extra setup that is needed before
+# the SlackBuild is run.
+PREFILE=$(libfile $PRG pre)
+if [ -f $PREFILE ]; then
+    eval $PREFILE
+fi
+
 chmod +x $PRG.SlackBuild
-env $INFOVARS ./$PRG.SlackBuild
+pwd
+if [ -f "$IVFILE" ]; then
+    # The sed expression allows for end-of-line backslash
+    # continuation, removing the slash and newline, and dequoting
+    # variable values to avoid problems with env.
+    #     IFS='
+    # ' env "`cat $IVFILE | sed '/\\\\$/{s=\\\\$==;N;s= [ \t]*= =g;s=\\n==};s/="/=/;s/"$//'`" /bin/sh -x ./$PRG.SlackBuild
+
+    # Remove any comments and backslash escape all unescaped newlins
+    # in the .infovars file and append a call to the SlackBuild
+    # effectively prefixing all the variables to the command.
+    (sed 's/#.*//;/[^\\]$/s/$/ \\/' $IVFILE; echo ./$PRG.SlackBuild) | sh
+else
+    ./$PRG.SlackBuild
+fi
 chmod -x $PRG.SlackBuild
 
 echo $PRG built.
